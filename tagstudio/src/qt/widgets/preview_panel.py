@@ -18,7 +18,7 @@ from PySide6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushB
 from humanfriendly import format_size
 
 from src.core.library import Entry, ItemType, Library
-from src.core.ts_core import VIDEO_TYPES, IMAGE_TYPES
+from src.core.ts_core import VIDEO_TYPES, IMAGE_TYPES, AUDIO_TYPES
 from src.qt.helpers import FileOpenerLabel, FileOpenerHelper, open_file
 from src.qt.modals import AddFieldModal
 from src.qt.widgets import (ThumbRenderer, FieldContainer, TagBoxWidget, TextWidget, PanelModal, EditTextBox,
@@ -375,7 +375,11 @@ class PreviewPanel(QWidget):
 							image = Image.fromarray(frame)
 							resolution = QSize(image.width, image.height)
 							self.preview_vid.play(filepath, resolution)
-							
+						# elif extension in AUDIO_TYPES:
+						# 	self.preview_vid.show()
+						# 	self.preview_img.hide()
+						# 	resolution = QSize(512, 512)
+						# 	self.preview_vid.play(filepath, resolution)
 						# Stats for specific file types are displayed here.
 						if extension in (IMAGE_TYPES + VIDEO_TYPES):
 							self.dimensions_label.setText(f"{extension.upper()}  •  {format_size(os.stat(filepath).st_size)}\n{image.width} x {image.height} px")

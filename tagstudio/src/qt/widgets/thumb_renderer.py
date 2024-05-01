@@ -8,12 +8,13 @@ import logging
 import math
 import os
 from pathlib import Path
-
+# import io
 import cv2
+# import mutagen
 from PIL import Image, ImageChops, UnidentifiedImageError, ImageQt, ImageDraw, ImageFont, ImageEnhance
 from PySide6.QtCore import QObject, Signal, QSize
 from PySide6.QtGui import QPixmap
-from src.core.ts_core import PLAINTEXT_TYPES, VIDEO_TYPES, IMAGE_TYPES
+from src.core.ts_core import PLAINTEXT_TYPES, VIDEO_TYPES, IMAGE_TYPES, AUDIO_TYPES
 
 
 ERROR = f'[ERROR]'
@@ -121,6 +122,15 @@ class ThumbRenderer(QObject):
 						success, frame = video.read()
 					frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
 					image = Image.fromarray(frame)
+
+				# # Audio ========================================================
+				# elif extension in AUDIO_TYPES:
+				# 	im_file = mutagen.File(filepath)
+				# 	logging.info(im_file)
+				# 	if im_file.__contains__('APIC:Album cover'):
+				# 		artwork = mutagen.id3.APIC(im_file.tags['APIC:Album cover'])
+				# 		image_type = artwork.mime.split('/')[1]
+				# 		image = Image.open(io.BytesIO(artwork.data))
 
 				# Plain Text ===================================================
 				elif extension in PLAINTEXT_TYPES:

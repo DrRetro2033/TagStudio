@@ -1,11 +1,16 @@
 import logging
+import os
 
-from PySide6.QtCore import Qt, QSize, QTimer, QVariantAnimation, QUrl, QObject, QEvent
-from PySide6.QtMultimedia import QMediaPlayer, QAudioOutput, QMediaDevices
+os.environ['QT_MULTIMEDIA_PREFERRED_PLUGINS'] = 'windowsmediafoundation'
+
+from PySide6.QtCore import Qt, QSize, QTimer, QVariantAnimation, QUrl, QObject, QEvent, QRect
+from PySide6.QtMultimedia import QMediaPlayer, QAudioOutput, QMediaDevices, QAudioFormat, QAudioDecoder
 from PySide6.QtMultimediaWidgets import QGraphicsVideoItem
 from PySide6.QtWidgets import QGraphicsView, QGraphicsScene
-from PySide6.QtGui import QPainter, QPen, QColor, QBrush, QResizeEvent
+from PySide6.QtGui import QDragMoveEvent, QInputMethodEvent, QPainter, QPen, QColor, QBrush, QResizeEvent
 from PySide6.QtSvgWidgets import QSvgWidget
+
+from src.core.ts_core import VIDEO_TYPES, AUDIO_TYPES
 
 class VideoPlayer(QGraphicsView):
 	"""A simple video player for the TagStudio application."""
@@ -23,15 +28,11 @@ class VideoPlayer(QGraphicsView):
 		
 		self.animation = QVariantAnimation(self)
 		self.animation.valueChanged.connect(lambda value: self.setTintTransparency(value))
-		
 		self.hover_fix_timer.timeout.connect(lambda: self.checkIfStillHovered())
 		self.hover_fix_timer.setSingleShot(True)
-
 		# Set up the video player.	
 		self.installEventFilter(self)
-		self.setMouseTracking(True)
 		self.setScene(QGraphicsScene(self))
-		self.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform)
 		self.player = QMediaPlayer(self)
 		self.player.mediaStatusChanged.connect(lambda: self.checkMediaStatus(self.player.mediaStatus()))
 		self.video_preview = QGraphicsVideoItem()
@@ -39,12 +40,12 @@ class VideoPlayer(QGraphicsView):
 		self.video_preview.setAcceptHoverEvents(True)
 		self.video_preview.installEventFilter(self)
 		self.player.setAudioOutput(QAudioOutput(QMediaDevices().defaultAudioOutput(),self.player))
+		self.player.audioOutput().device()
 		self.setAlignment(Qt.AlignmentFlag.AlignCenter)
 		self.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
 		self.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
 		self.scene().addItem(self.video_preview)
-		self.setMouseTracking(True)
-
+		self.video_preview.setAcceptedMouseButtons(Qt.MouseButton.LeftButton)
 		# Set up the video tint.
 		self.video_tint = self.scene().addRect(0, 0, self.video_preview.size().width(), self.video_preview.size().height(), QPen(QColor(0, 0, 0, 0)), QBrush(QColor(0, 0, 0, 0)))
 		# self.video_tint.setParentItem(self.video_preview)
@@ -72,14 +73,24 @@ class VideoPlayer(QGraphicsView):
 			#Switches current video to with video at filepath. Reason for this is because Pyside6 is dumb and can't handle setting a new source and freezes.
 			#Even if I stop the player before switching, it breaks.
 			#On the plus side, this adds infinite looping for the video preview.
+			old_filename = self.player.source().fileName()
+			logging.info(f'Old filepath: {old_filename}')
 			self.player.setSource(QUrl().fromLocalFile(self.filepath))
-			logging.info(f'Set source to {self.filepath}.')
+			# logging.info(f'Set source to {self.filepath}.')
 			# self.video_preview.setSize(self.resolution)
-			
 			self.player.setPosition(0)
-			logging.info(f'Set muted to true.')
-			self.player.play()
-			logging.info(f'Successfully played.')
+			# logging.info(f'Set muted to true.')
+			extension = os.path.splitext(self.filepath)[1][1:].lower()
+			filename = os.path.basename(self.filepath)
+			if old_filename == filename:
+				self.player.play()
+			elif extension in VIDEO_TYPES:
+				self.player.audioOutput().setMuted(True)
+				self.player.play()
+			elif extension in AUDIO_TYPES:
+				self.player.audioOutput().setMuted(False)
+				self.player.pause()
+			# logging.info(f'Successfully played.')
 			self.keepControlsInPlace()
 			self.updateControls()
 	def updateControls(self) -> None:
@@ -111,7 +122,6 @@ class VideoPlayer(QGraphicsView):
 				self.hover_fix_timer.stop()
 				self.releaseMouse()
 
-
 		return super().eventFilter(obj, event)
 	
 	def checkIfStillHovered(self) -> None:
@@ -134,6 +144,8 @@ class VideoPlayer(QGraphicsView):
 		self.play_pause.show()
 		self.mute_button.show()
 		self.keepControlsInPlace()
+		self.centerOn(self.video_preview)
+		self.scene().setSceneRect(QRect(0,0, self.video_preview.size().width()-1, self.video_preview.size().height()-1))
 		return super().underMouse()
 
 	def releaseMouse(self) -> None:
@@ -191,6 +203,7 @@ class VideoPlayer(QGraphicsView):
 		self.video_preview.setSize(new_size)
 		self.video_tint.setRect(0, 0, self.video_preview.size().width(), self.video_preview.size().height())
 		self.centerOn(self.video_preview)
+		self.scene().setSceneRect(QRect(0,0, new_size.width()-1, new_size.height()-1))
 		self.keepControlsInPlace()
 
 	def keepControlsInPlace(self) -> None:
@@ -202,4 +215,10 @@ class VideoPlayer(QGraphicsView):
 		# Keeps the video preview in the center of the screen.
 		self.centerOn(self.video_preview)
 		return
-		# return super().resizeEvent(event)
+		# return super().resizeEvent(event)\
+
+
+
+	def inputMethodEvent(self, event: QInputMethodEvent) -> None:
+		return
+		return super().inputMethodEvent(event)
