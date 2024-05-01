@@ -22,7 +22,7 @@ class VideoPlayer(QGraphicsView):
 		super().__init__()
 		
 		self.animation = QVariantAnimation(self)
-		self.animation.valueChanged.connect(lambda value: self.set_tint_transparency(value))
+		self.animation.valueChanged.connect(lambda value: self.setTintTransparency(value))
 		
 		self.hover_fix_timer.timeout.connect(lambda: self.checkIfStillHovered())
 		self.hover_fix_timer.setSingleShot(True)
@@ -33,7 +33,7 @@ class VideoPlayer(QGraphicsView):
 		self.setScene(QGraphicsScene(self))
 		self.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform)
 		self.player = QMediaPlayer(self)
-		self.player.mediaStatusChanged.connect(lambda: self.check_media_status(self.player.mediaStatus()))
+		self.player.mediaStatusChanged.connect(lambda: self.checkMediaStatus(self.player.mediaStatus()))
 		self.video_preview = QGraphicsVideoItem()
 		self.player.setVideoOutput(self.video_preview)
 		self.video_preview.setAcceptHoverEvents(True)
@@ -66,7 +66,7 @@ class VideoPlayer(QGraphicsView):
 		self.mute_button.move(self.width() - self.mute_button.size().width()/2, self.height() - self.mute_button.size().height()/2)
 		self.mute_button.hide()
 
-	def check_media_status(self, media_status:QMediaPlayer.MediaStatus) -> None:
+	def checkMediaStatus(self, media_status:QMediaPlayer.MediaStatus) -> None:
 		logging.info(media_status)
 		if media_status == QMediaPlayer.MediaStatus.EndOfMedia:
 			#Switches current video to with video at filepath. Reason for this is because Pyside6 is dumb and can't handle setting a new source and freezes.
@@ -80,9 +80,9 @@ class VideoPlayer(QGraphicsView):
 			logging.info(f'Set muted to true.')
 			self.player.play()
 			logging.info(f'Successfully played.')
-			self.keep_controls_in_place()
-			self.update_controls()
-	def update_controls(self) -> None:
+			self.keepControlsInPlace()
+			self.updateControls()
+	def updateControls(self) -> None:
 		if self.player.audioOutput().isMuted():
 			self.mute_button.load('./tagstudio/resources/volume_muted.svg')
 		else:
@@ -96,11 +96,11 @@ class VideoPlayer(QGraphicsView):
 		#This chunk of code is for the video controls.
 		if obj == self.play_pause and event.type() == QEvent.Type.MouseButtonPress and event.button() == Qt.MouseButton.LeftButton:
 			if self.player.hasVideo():
-				self.pause_toggle()
+				self.pauseToggle()
 		
 		if obj == self.mute_button and event.type() == QEvent.Type.MouseButtonPress and event.button() == Qt.MouseButton.LeftButton:
 			if self.player.hasAudio():
-				self.mute_toggle()
+				self.muteToggle()
 
 		if obj == self.video_preview and event.type() == QEvent.Type.GraphicsSceneHoverEnter or event.type() == QEvent.Type.HoverEnter:
 			if self.video_preview.isUnderMouse():
@@ -122,7 +122,7 @@ class VideoPlayer(QGraphicsView):
 		else:
 			self.hover_fix_timer.start(10)
 	
-	def set_tint_transparency(self, value) -> None:
+	def setTintTransparency(self, value) -> None:
 		self.video_tint.setBrush(QBrush(QColor(0, 0, 0, value)))
 
 	def underMouse(self) -> bool:
@@ -133,7 +133,7 @@ class VideoPlayer(QGraphicsView):
 		self.animation.start()
 		self.play_pause.show()
 		self.mute_button.show()
-		self.keep_controls_in_place()
+		self.keepControlsInPlace()
 		return super().underMouse()
 
 	def releaseMouse(self) -> None:
@@ -146,13 +146,13 @@ class VideoPlayer(QGraphicsView):
 		self.mute_button.hide()
 		return super().releaseMouse()
 	
-	def reset_controls_to_default(self) -> None:
+	def resetControlsToDefault(self) -> None:
 		# Resets the video controls to their default state.
 		self.play_pause.load('./tagstudio/resources/pause.svg')
 		self.mute_button.load('./tagstudio/resources/volume_muted.svg')
 
 
-	def pause_toggle(self) -> None:
+	def pauseToggle(self) -> None:
 		if self.player.isPlaying():
 			self.player.pause()
 			self.play_pause.load('./tagstudio/resources/play.svg')
@@ -160,7 +160,7 @@ class VideoPlayer(QGraphicsView):
 			self.player.play()
 			self.play_pause.load('./tagstudio/resources/pause.svg')
 	
-	def mute_toggle(self) -> None:
+	def muteToggle(self) -> None:
 		if self.player.audioOutput().isMuted():
 			self.player.audioOutput().setMuted(False)
 			self.mute_button.load('./tagstudio/resources/volume_unmuted.svg')
@@ -178,7 +178,7 @@ class VideoPlayer(QGraphicsView):
 			self.player.setPosition(self.player.duration())
 			self.player.play()
 		else:
-			self.check_media_status(QMediaPlayer.MediaStatus.EndOfMedia)
+			self.checkMediaStatus(QMediaPlayer.MediaStatus.EndOfMedia)
 
 		logging.info(f'Successfully stopped.')
 
@@ -186,14 +186,14 @@ class VideoPlayer(QGraphicsView):
 		# Stops the video.
 		self.player.stop()
 
-	def resize_video(self, new_size : QSize,) -> None:
+	def resizeVideo(self, new_size : QSize,) -> None:
 		# Resizes the video preview to the new size.
 		self.video_preview.setSize(new_size)
 		self.video_tint.setRect(0, 0, self.video_preview.size().width(), self.video_preview.size().height())
 		self.centerOn(self.video_preview)
-		self.keep_controls_in_place()
+		self.keepControlsInPlace()
 
-	def keep_controls_in_place(self) -> None:
+	def keepControlsInPlace(self) -> None:
 		# Keeps the video controls in the places they should be.
 		self.play_pause.move(self.width()/2 - self.play_pause.size().width()/2, self.height()/2 - self.play_pause.size().height()/2)
 		self.mute_button.move(self.width() - self.mute_button.size().width()-10, self.height() - self.mute_button.size().height()-10)

@@ -251,7 +251,7 @@ class PreviewPanel(QWidget):
 		self.preview_img.setMaximumSize(adj_size)
 		self.preview_img.setIconSize(adj_size)
 		self.preview_vid.setMaximumSize(adj_size)
-		self.preview_vid.resize_video(adj_size)
+		self.preview_vid.resizeVideo(adj_size)
 		# self.preview_img.setMinimumSize(adj_size)
 
 		# if self.preview_img.iconSize().toTuple()[0] < self.preview_img.size().toTuple()[0] + 10:
