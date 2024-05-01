@@ -114,7 +114,7 @@ class VideoPlayer(QGraphicsView):
 
 		return super().eventFilter(obj, event)
 	
-	def check_if_still_hovered(self) -> None:
+	def checkIfStillHovered(self) -> None:
 		#Yet again, Pyside6 is dumb. I don't know why, but the HoverLeave event is not triggered sometimes and does not hide the controls.
 		#So, this is a workaround. This is called by a QTimer every 10ms to check if the mouse is still in the video preview.
 		if not self.video_preview.isUnderMouse():
