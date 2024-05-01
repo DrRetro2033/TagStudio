@@ -11,3 +11,4 @@ from .tag_box import TagBoxWidget
 from .text import TextWidget
 from .item_thumb import ItemThumb
 from .preview_panel import PreviewPanel
+from .video_player import VideoPlayer

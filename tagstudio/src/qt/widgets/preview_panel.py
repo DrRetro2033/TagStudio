@@ -23,6 +23,7 @@ from src.qt.helpers import FileOpenerLabel, FileOpenerHelper, open_file
 from src.qt.modals import AddFieldModal
 from src.qt.widgets import (ThumbRenderer, FieldContainer, TagBoxWidget, TextWidget, PanelModal, EditTextBox,
 							EditTextLine, ItemThumb)
+from .video_player import VideoPlayer
 
 # Only import for type checking/autocompletion, will not be imported at runtime.
 if typing.TYPE_CHECKING:
@@ -78,17 +79,22 @@ class PreviewPanel(QWidget):
 
 		self.preview_img.addAction(self.open_file_action)
 		self.preview_img.addAction(self.open_explorer_action)
+		self.preview_vid = VideoPlayer()
+		self.image_container.setMinimumSize(*self.img_button_size)
+		# self.preview_vid.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
+		self.preview_vid.hide()
 		self.tr = ThumbRenderer()
+
 		self.tr.updated.connect(lambda ts, i, s: (self.preview_img.setIcon(i)))
 		self.tr.updated_ratio.connect(lambda ratio: (self.set_image_ratio(ratio), 
 											   self.update_image_size((self.image_container.size().width(), self.image_container.size().height()), ratio)))
 
 		splitter.splitterMoved.connect(lambda: self.update_image_size((self.image_container.size().width(), self.image_container.size().height())))
 		splitter.addWidget(self.image_container)
-
+		image_layout.addWidget(self.preview_vid)
 		image_layout.addWidget(self.preview_img)
 		image_layout.setAlignment(self.preview_img, Qt.AlignmentFlag.AlignCenter)
-
+		image_layout.setAlignment(self.preview_vid, Qt.AlignmentFlag.AlignCenter)
 		self.file_label = FileOpenerLabel('Filename')
 		self.file_label.setWordWrap(True)
 		self.file_label.setTextInteractionFlags(
@@ -244,6 +250,8 @@ class PreviewPanel(QWidget):
 		self.img_button_size = (adj_width, adj_height)
 		self.preview_img.setMaximumSize(adj_size)
 		self.preview_img.setIconSize(adj_size)
+		self.preview_vid.setMaximumSize(adj_size)
+		self.preview_vid.resize_video(adj_size)
 		# self.preview_img.setMinimumSize(adj_size)
 
 		# if self.preview_img.iconSize().toTuple()[0] < self.preview_img.size().toTuple()[0] + 10:
@@ -337,6 +345,9 @@ class PreviewPanel(QWidget):
 					try:
 						image = None
 						if extension in IMAGE_TYPES:
+							self.preview_img.show()
+							self.preview_vid.stop()
+							self.preview_vid.hide()
 							image = Image.open(filepath)
 							if image.mode == 'RGBA':
 								new_bg = Image.new('RGB', image.size, color='#222222')
@@ -345,6 +356,9 @@ class PreviewPanel(QWidget):
 							if image.mode != 'RGB':
 								image = image.convert(mode='RGB')
 						elif extension in VIDEO_TYPES:
+							self.preview_vid.show()
+							self.preview_img.hide()
+
 							video = cv2.VideoCapture(filepath)
 							video.set(cv2.CAP_PROP_POS_FRAMES,
 									(video.get(cv2.CAP_PROP_FRAME_COUNT) // 2))
@@ -357,7 +371,9 @@ class PreviewPanel(QWidget):
 								success, frame = video.read()
 							frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
 							image = Image.fromarray(frame)
-
+							resolution = QSize(image.width, image.height)
+							self.preview_vid.play(filepath, resolution)
+							
 						# Stats for specific file types are displayed here.
 						if extension in (IMAGE_TYPES + VIDEO_TYPES):
 							self.dimensions_label.setText(f"{extension.upper()}  •  {format_size(os.stat(filepath).st_size)}\n{image.width} x {image.height} px")
