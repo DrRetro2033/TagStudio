@@ -315,7 +315,9 @@ class PreviewPanel(QWidget):
 					pass
 				for i, c in enumerate(self.containers):
 					c.setHidden(True)
-
+			self.preview_img.show()
+			self.preview_vid.stop()
+			self.preview_vid.hide()
 			self.selected = list(self.driver.selected)
 			self.add_field_button.setHidden(True)
 		
@@ -429,7 +431,9 @@ class PreviewPanel(QWidget):
 					self.preview_img.clicked.disconnect()
 				except RuntimeError:
 					pass
-
+			self.preview_img.show()
+			self.preview_vid.stop()
+			self.preview_vid.hide()
 			self.common_fields = []
 			self.mixed_fields = []
 			for i, item_pair in enumerate(self.driver.selected):
