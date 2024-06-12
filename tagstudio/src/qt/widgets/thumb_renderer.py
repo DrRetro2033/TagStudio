@@ -5,7 +5,6 @@
 
 import logging
 import math
-import os
 from pathlib import Path
 
 import cv2
@@ -30,6 +29,7 @@ from src.core.constants import (
     IMAGE_TYPES,
     RAW_IMAGE_TYPES,
 )
+from src.core.utils.encoding import detect_char_encoding
 
 ImageFile.LOAD_TRUNCATED_IMAGES = True
 
@@ -134,7 +134,7 @@ class ThumbRenderer(QObject):
                         image = ImageOps.exif_transpose(image)
                     except DecompressionBombError as e:
                         logging.info(
-                            f"[ThumbRenderer]{WARNING} Couldn't Render thumbnail for {_filepath} (because of {e})"
+                            f"[ThumbRenderer]{WARNING} Couldn't Render thumbnail for {_filepath.name} ({type(e).__name__})"
                         )
 
                 elif _filepath.suffix.lower() in RAW_IMAGE_TYPES:
@@ -149,20 +149,23 @@ class ThumbRenderer(QObject):
                             )
                     except DecompressionBombError as e:
                         logging.info(
-                            f"[ThumbRenderer]{WARNING} Couldn't Render thumbnail for {_filepath} (because of {e})"
+                            f"[ThumbRenderer]{WARNING} Couldn't Render thumbnail for {_filepath.name} ({type(e).__name__})"
                         )
-                    except rawpy._rawpy.LibRawIOError:
+                    except (
+                        rawpy._rawpy.LibRawIOError,
+                        rawpy._rawpy.LibRawFileUnsupportedError,
+                    ) as e:
                         logging.info(
-                            f"[ThumbRenderer]{ERROR} Couldn't Render thumbnail for raw image {_filepath}"
+                            f"[ThumbRenderer]{ERROR} Couldn't Render thumbnail for raw image {_filepath.name} ({type(e).__name__})"
                         )
 
                 # Videos =======================================================
                 elif _filepath.suffix.lower() in VIDEO_TYPES:
                     video = cv2.VideoCapture(str(_filepath))
-                    video.set(
-                        cv2.CAP_PROP_POS_FRAMES,
-                        (video.get(cv2.CAP_PROP_FRAME_COUNT) // 2),
-                    )
+                    frame_count = video.get(cv2.CAP_PROP_FRAME_COUNT)
+                    if frame_count <= 0:
+                        raise cv2.error("File is invalid or has 0 frames")
+                    video.set(cv2.CAP_PROP_POS_FRAMES, frame_count // 2)
                     success, frame = video.read()
                     if not success:
                         # Depending on the video format, compression, and frame
@@ -175,7 +178,8 @@ class ThumbRenderer(QObject):
 
                 # Plain Text ===================================================
                 elif _filepath.suffix.lower() in PLAINTEXT_TYPES:
-                    with open(_filepath, "r", encoding="utf-8") as text_file:
+                    encoding = detect_char_encoding(_filepath)
+                    with open(_filepath, "r", encoding=encoding) as text_file:
                         text = text_file.read(256)
                     bg = Image.new("RGB", (256, 256), color="#1e1e1e")
                     draw = ImageDraw.Draw(bg)
@@ -265,7 +269,7 @@ class ThumbRenderer(QObject):
             ) as e:
                 if e is not UnicodeDecodeError:
                     logging.info(
-                        f"[ThumbRenderer]{ERROR}: Couldn't render thumbnail for {_filepath} ({e})"
+                        f"[ThumbRenderer]{ERROR}: Couldn't render thumbnail for {_filepath.name} ({type(e).__name__})"
                     )
                 if update_on_ratio_change:
                     self.updated_ratio.emit(1)

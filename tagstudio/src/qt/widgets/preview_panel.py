@@ -3,7 +3,7 @@
 # Created for TagStudio: https://github.com/CyanVoxel/TagStudio
 
 import logging
-import os
+from pathlib import Path
 import time
 import typing
 from datetime import datetime as dt
@@ -30,7 +30,7 @@ from humanfriendly import format_size
 
 from src.core.enums import SettingItems, Theme
 from src.core.library import Entry, ItemType, Library
-from src.core.constants import VIDEO_TYPES, IMAGE_TYPES, RAW_IMAGE_TYPES
+from src.core.constants import VIDEO_TYPES, IMAGE_TYPES, RAW_IMAGE_TYPES, TS_FOLDER_NAME
 from src.qt.helpers.file_opener import FileOpenerLabel, FileOpenerHelper, open_file
 from src.qt.modals.add_field import AddFieldModal
 from src.qt.widgets.thumb_renderer import ThumbRenderer
@@ -40,16 +40,16 @@ from src.qt.widgets.text import TextWidget
 from src.qt.widgets.panel import PanelModal
 from src.qt.widgets.text_box_edit import EditTextBox
 from src.qt.widgets.text_line_edit import EditTextLine
-from src.qt.widgets.item_thumb import ItemThumb
+from src.qt.widgets.video_player import VideoPlayer
 
 
 # Only import for type checking/autocompletion, will not be imported at runtime.
 if typing.TYPE_CHECKING:
     from src.qt.ts_qt import QtDriver
 
-ERROR = f"[ERROR]"
-WARNING = f"[WARNING]"
-INFO = f"[INFO]"
+ERROR = "[ERROR]"
+WARNING = "[WARNING]"
+INFO = "[INFO]"
 
 logging.basicConfig(format="%(message)s", level=logging.INFO)
 
@@ -90,7 +90,8 @@ class PreviewPanel(QWidget):
 
         self.preview_img.addAction(self.open_file_action)
         self.preview_img.addAction(self.open_explorer_action)
-
+        self.preview_vid = VideoPlayer(driver)
+        self.preview_vid.hide()
         self.thumb_renderer = ThumbRenderer()
         self.thumb_renderer.updated.connect(
             lambda ts, i, s: (self.preview_img.setIcon(i))
@@ -110,7 +111,9 @@ class PreviewPanel(QWidget):
 
         image_layout.addWidget(self.preview_img)
         image_layout.setAlignment(self.preview_img, Qt.AlignmentFlag.AlignCenter)
-
+        image_layout.addWidget(self.preview_vid)
+        image_layout.setAlignment(self.preview_vid, Qt.AlignmentFlag.AlignCenter)
+        self.image_container.setMinimumSize(*self.img_button_size)
         self.file_label = FileOpenerLabel("Filename")
         self.file_label.setWordWrap(True)
         self.file_label.setTextInteractionFlags(
@@ -295,6 +298,7 @@ class PreviewPanel(QWidget):
                     "}"
                     f"QPushButton::hover{{background-color:{Theme.COLOR_HOVER.value};}}"
                     f"QPushButton::pressed{{background-color:{Theme.COLOR_PRESSED.value};}}"
+                    f"QPushButton::disabled{{background-color:{Theme.COLOR_DISABLED_BG.value};}}"
                 )
             )
             btn.setCursor(Qt.CursorShape.PointingHandCursor)
@@ -303,8 +307,13 @@ class PreviewPanel(QWidget):
             button = QPushButton(text=cut_val)
             button.setObjectName(f"path{item_key}")
 
+            lib = Path(full_val)
+            if not lib.exists() or not (lib / TS_FOLDER_NAME).exists():
+                button.setDisabled(True)
+                button.setToolTip("Location is missing")
+
             def open_library_button_clicked(path):
-                return lambda: self.driver.open_library(path)
+                return lambda: self.driver.open_library(Path(path))
 
             button.clicked.connect(open_library_button_clicked(full_val))
             set_button_style(button)
@@ -378,6 +387,9 @@ class PreviewPanel(QWidget):
         self.img_button_size = (int(adj_width), int(adj_height))
         self.preview_img.setMaximumSize(adj_size)
         self.preview_img.setIconSize(adj_size)
+        self.preview_vid.resizeVideo(adj_size)
+        self.preview_vid.setMaximumSize(adj_size)
+        self.preview_vid.setMinimumSize(adj_size)
         # self.preview_img.setMinimumSize(adj_size)
 
         # if self.preview_img.iconSize().toTuple()[0] < self.preview_img.size().toTuple()[0] + 10:
@@ -435,7 +447,7 @@ class PreviewPanel(QWidget):
         # 0 Selected Items
         if not self.driver.selected:
             if self.selected or not self.initialized:
-                self.file_label.setText(f"No Items Selected")
+                self.file_label.setText("No Items Selected")
                 self.file_label.setFilePath("")
                 self.file_label.setCursor(Qt.CursorShape.ArrowCursor)
 
@@ -460,7 +472,9 @@ class PreviewPanel(QWidget):
                     pass
                 for i, c in enumerate(self.containers):
                     c.setHidden(True)
-
+            self.preview_img.show()
+            self.preview_vid.stop()
+            self.preview_vid.hide()
             self.selected = list(self.driver.selected)
             self.add_field_button.setHidden(True)
 
@@ -468,6 +482,9 @@ class PreviewPanel(QWidget):
         elif len(self.driver.selected) == 1:
             # 1 Selected Entry
             if self.driver.selected[0][0] == ItemType.ENTRY:
+                self.preview_img.show()
+                self.preview_vid.stop()
+                self.preview_vid.hide()
                 item: Entry = self.lib.get_entry(self.driver.selected[0][1])
                 # If a new selection is made, update the thumbnail and filepath.
                 if not self.selected or self.selected != self.driver.selected:
@@ -502,48 +519,70 @@ class PreviewPanel(QWidget):
                         if filepath.suffix.lower() in IMAGE_TYPES:
                             image = Image.open(str(filepath))
                         elif filepath.suffix.lower() in RAW_IMAGE_TYPES:
-                            with rawpy.imread(filepath) as raw:
-                                rgb = raw.postprocess()
-                                image = Image.new(
-                                    "L", (rgb.shape[1], rgb.shape[0]), color="black"
-                                )
+                            try:
+                                with rawpy.imread(str(filepath)) as raw:
+                                    rgb = raw.postprocess()
+                                    image = Image.new(
+                                        "L", (rgb.shape[1], rgb.shape[0]), color="black"
+                                    )
+                            except (
+                                rawpy._rawpy.LibRawIOError,
+                                rawpy._rawpy.LibRawFileUnsupportedError,
+                            ):
+                                pass
                         elif filepath.suffix.lower() in VIDEO_TYPES:
                             video = cv2.VideoCapture(str(filepath))
+                            if video.get(cv2.CAP_PROP_FRAME_COUNT) <= 0:
+                                raise cv2.error("File is invalid or has 0 frames")
                             video.set(cv2.CAP_PROP_POS_FRAMES, 0)
                             success, frame = video.read()
                             frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
                             image = Image.fromarray(frame)
+                            if success:
+                                self.preview_img.hide()
+                                self.preview_vid.play(
+                                    filepath, QSize(image.width, image.height)
+                                )
+                                self.resizeEvent(
+                                    QResizeEvent(
+                                        QSize(image.width, image.height),
+                                        QSize(image.width, image.height),
+                                    )
+                                )
+                                self.preview_vid.show()
 
                         # Stats for specific file types are displayed here.
-                        if filepath.suffix.lower() in (
+                        if image and filepath.suffix.lower() in (
                             IMAGE_TYPES + VIDEO_TYPES + RAW_IMAGE_TYPES
                         ):
                             self.dimensions_label.setText(
-                                f"{filepath.suffix.lower().upper()[1:]}  •  {format_size(os.stat(filepath).st_size)}\n{image.width} x {image.height} px"
+                                f"{filepath.suffix.upper()[1:]}  •  {format_size(filepath.stat().st_size)}\n{image.width} x {image.height} px"
                             )
                         else:
                             self.dimensions_label.setText(
-                                f"{filepath.suffix.lower().upper()[1:]}  •  {format_size(os.stat(filepath).st_size)}"
+                                f"{filepath.suffix.upper()[1:]}  •  {format_size(filepath.stat().st_size)}"
                             )
 
                         if not filepath.is_file():
                             raise FileNotFoundError
 
                     except FileNotFoundError as e:
-                        self.dimensions_label.setText(
-                            f"{filepath.suffix.lower().upper()[1:]}"
-                        )
+                        self.dimensions_label.setText(f"{filepath.suffix.upper()[1:]}")
                         logging.info(
                             f"[PreviewPanel][ERROR] Couldn't Render thumbnail for {filepath} (because of {e})"
                         )
 
+                    except (FileNotFoundError, cv2.error) as e:
+                        self.dimensions_label.setText(f"{filepath.suffix.upper()}")
+                        logging.info(
+                            f"[PreviewPanel][ERROR] Couldn't Render thumbnail for {filepath} (because of {e})"
+                        )
                     except (
                         UnidentifiedImageError,
-                        cv2.error,
                         DecompressionBombError,
                     ) as e:
                         self.dimensions_label.setText(
-                            f"{filepath.suffix.lower().upper()[1:]}  •  {format_size(os.stat(filepath).st_size)}"
+                            f"{filepath.suffix.upper()[1:]}  •  {format_size(filepath.stat().st_size)}"
                         )
                         logging.info(
                             f"[PreviewPanel][ERROR] Couldn't Render thumbnail for {filepath} (because of {e})"
@@ -579,6 +618,9 @@ class PreviewPanel(QWidget):
 
         # Multiple Selected Items
         elif len(self.driver.selected) > 1:
+            self.preview_img.show()
+            self.preview_vid.stop()
+            self.preview_vid.hide()
             if self.selected != self.driver.selected:
                 self.file_label.setText(f"{len(self.driver.selected)} Items Selected")
                 self.file_label.setCursor(Qt.CursorShape.ArrowCursor)
@@ -735,7 +777,7 @@ class PreviewPanel(QWidget):
             self.tags_updated.disconnect()
         except RuntimeError:
             pass
-        logging.info(f"[UPDATE CONTAINER] Setting tags updated slot")
+        logging.info("[UPDATE CONTAINER] Setting tags updated slot")
         self.tags_updated.connect(slot)
 
     # def write_container(self, item:Union[Entry, Collation, Tag], index, field):
