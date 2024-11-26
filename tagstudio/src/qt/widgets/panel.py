@@ -2,11 +2,10 @@
 # Licensed under the GPL-3.0 License.
 # Created for TagStudio: https://github.com/CyanVoxel/TagStudio
 import logging
-from types import FunctionType
 from typing import Callable
 
-from PySide6.QtCore import Signal, Qt
-from PySide6.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton
+from PySide6.QtCore import Qt, Signal
+from PySide6.QtWidgets import QHBoxLayout, QLabel, QPushButton, QVBoxLayout, QWidget
 
 
 class PanelModal(QWidget):
@@ -16,12 +15,11 @@ class PanelModal(QWidget):
     # figure out what you want from this.
     def __init__(
         self,
-        widget: "PanelWidget",
+        widget,
         title: str,
         window_title: str,
-        done_callback: Callable = None,
-        #  cancel_callback:FunctionType=None,
-        save_callback: Callable = None,
+        done_callback: Callable | None = None,
+        save_callback: Callable | None = None,
         has_save: bool = False,
     ):
         # [Done]
@@ -37,9 +35,7 @@ class PanelModal(QWidget):
         self.title_widget = QLabel()
         self.title_widget.setObjectName("fieldTitle")
         self.title_widget.setWordWrap(True)
-        self.title_widget.setStyleSheet(
-            "font-weight:bold;" "font-size:14px;" "padding-top: 6px"
-        )
+        self.title_widget.setStyleSheet("font-weight:bold;" "font-size:14px;" "padding-top: 6px")
         self.title_widget.setText(title)
         self.title_widget.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
@@ -58,6 +54,7 @@ class PanelModal(QWidget):
             self.done_button.clicked.connect(self.hide)
             if done_callback:
                 self.done_button.clicked.connect(done_callback)
+            self.widget.panel_done_button = self.done_button
             self.button_layout.addWidget(self.done_button)
 
         if save_callback or has_save:
@@ -66,6 +63,7 @@ class PanelModal(QWidget):
             self.cancel_button.clicked.connect(self.hide)
             self.cancel_button.clicked.connect(widget.reset)
             # self.cancel_button.clicked.connect(cancel_callback)
+            self.widget.panel_cancel_button = self.cancel_button
             self.button_layout.addWidget(self.cancel_button)
 
             self.save_button = QPushButton()
@@ -73,13 +71,14 @@ class PanelModal(QWidget):
             self.save_button.setAutoDefault(True)
             self.save_button.clicked.connect(self.hide)
             self.save_button.clicked.connect(self.saved.emit)
+            self.widget.panel_save_button = self.save_button
 
             if done_callback:
                 self.save_button.clicked.connect(done_callback)
+
             if save_callback:
-                self.save_button.clicked.connect(
-                    lambda: save_callback(widget.get_content())
-                )
+                self.save_button.clicked.connect(lambda: save_callback(widget.get_content()))
+
             self.button_layout.addWidget(self.save_button)
 
             # trigger save button actions when pressing enter in the widget
@@ -94,11 +93,12 @@ class PanelModal(QWidget):
 
 
 class PanelWidget(QWidget):
-    """
-    Used for widgets that go in a modal panel, ex. for editing or searching.
-    """
+    """Used for widgets that go in a modal panel, ex. for editing or searching."""
 
     done = Signal()
+    panel_save_button: QPushButton | None = None
+    panel_cancel_button: QPushButton | None = None
+    panel_done_button: QPushButton | None = None
 
     def __init__(self):
         super().__init__()

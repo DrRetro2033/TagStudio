@@ -2,22 +2,17 @@
 # Licensed under the GPL-3.0 License.
 # Created for TagStudio: https://github.com/CyanVoxel/TagStudio
 
-import logging
-import os
-import subprocess
 import shutil
+import subprocess
 import sys
 import traceback
 from pathlib import Path
 
-from PySide6.QtWidgets import QLabel
+import structlog
 from PySide6.QtCore import Qt
+from PySide6.QtWidgets import QLabel
 
-ERROR = f"[ERROR]"
-WARNING = f"[WARNING]"
-INFO = f"[INFO]"
-
-logging.basicConfig(format="%(message)s", level=logging.INFO)
+logger = structlog.get_logger(__name__)
 
 
 def open_file(path: str | Path, file_manager: bool = False):
@@ -25,21 +20,23 @@ def open_file(path: str | Path, file_manager: bool = False):
 
     Args:
             path (str): The path to the file to open.
-            file_manager (bool, optional): Whether to open the file in the file manager (e.g. Finder on macOS).
-                    Defaults to False.
+            file_manager (bool, optional): Whether to open the file in the file manager
+                (e.g. Finder on macOS). Defaults to False.
     """
-    _path = str(path)
-    logging.info(f"Opening file: {_path}")
-    if not os.path.exists(_path):
-        logging.error(f"File not found: {_path}")
+    path = Path(path)
+    logger.info("Opening file", path=path)
+    if not path.exists():
+        logger.error("File not found", path=path)
         return
+
     try:
         if sys.platform == "win32":
-            normpath = os.path.normpath(_path)
+            normpath = Path(path).resolve().as_posix()
             if file_manager:
                 command_name = "explorer"
                 command_args = '/select,"' + normpath + '"'
-                # For some reason, if the args are passed in a list, this will error when the path has spaces, even while surrounded in double quotes
+                # For some reason, if the args are passed in a list, this will error when the
+                # path has spaces, even while surrounded in double quotes.
                 subprocess.Popen(
                     command_name + command_args,
                     shell=True,
@@ -61,7 +58,7 @@ def open_file(path: str | Path, file_manager: bool = False):
         else:
             if sys.platform == "darwin":
                 command_name = "open"
-                command_args = [_path]
+                command_args = [str(path)]
                 if file_manager:
                     # will reveal in Finder
                     command_args.append("-R")
@@ -75,18 +72,18 @@ def open_file(path: str | Path, file_manager: bool = False):
                         "--type=method_call",
                         "/org/freedesktop/FileManager1",
                         "org.freedesktop.FileManager1.ShowItems",
-                        f"array:string:file://{_path}",
+                        f"array:string:file://{str(path)}",
                         "string:",
                     ]
                 else:
                     command_name = "xdg-open"
-                    command_args = [_path]
+                    command_args = [str(path)]
             command = shutil.which(command_name)
             if command is not None:
                 subprocess.Popen([command] + command_args, close_fds=True)
             else:
-                logging.info(f"Could not find {command_name} on system PATH")
-    except:
+                logger.info("Could not find command on system PATH", command=command_name)
+    except Exception:
         traceback.print_exc()
 
 
@@ -126,7 +123,7 @@ class FileOpenerLabel(QLabel):
         """
         super().__init__(text, parent)
 
-    def setFilePath(self, filepath):
+    def set_file_path(self, filepath):
         """Set the filepath to open.
 
         Args:
@@ -134,19 +131,20 @@ class FileOpenerLabel(QLabel):
         """
         self.filepath = filepath
 
-    def mousePressEvent(self, event):
+    def mousePressEvent(self, event):  # noqa: N802
         """Handle mouse press events.
 
-        On a left click, open the file in the default file explorer. On a right click, show a context menu.
+        On a left click, open the file in the default file explorer.
+        On a right click, show a context menu.
 
         Args:
                 event (QMouseEvent): The mouse press event.
         """
         super().mousePressEvent(event)
 
-        if event.button() == Qt.LeftButton:
+        if event.button() == Qt.MouseButton.LeftButton:
             opener = FileOpenerHelper(self.filepath)
             opener.open_explorer()
-        elif event.button() == Qt.RightButton:
+        elif event.button() == Qt.MouseButton.RightButton:
             # Show context menu
             pass
